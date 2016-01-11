@@ -117,12 +117,34 @@ function readyToActivate() {
                         .then(function (resp) { return mainPanelView_1.errorView.setErrors(filePath, resp.errors); });
                 });
                 var buffer = editor.buffer;
+                var pendingDiff = undefined;
+                var pendingDiffHandle = undefined;
                 var fasterChangeObserver = editor.buffer.onDidChange(function (diff) {
-                    var newText = diff.newText;
-                    var oldText = diff.oldText;
-                    var start = { line: diff.oldRange.start.row, col: diff.oldRange.start.column };
-                    var end = { line: diff.oldRange.end.row, col: diff.oldRange.end.column };
-                    var promise = parent.editText({ filePath: filePath, start: start, end: end, newText: newText });
+                    if (pendingDiff) {
+                        pendingDiff.newText = diff.newText;
+                        pendingDiff.oldRange.start.row = min(pendingDiff.oldRange.start.row, diff.oldRange.start.row);
+                        pendingDiff.oldRange.start.column = min(pendingDiff.oldRange.start.column, diff.oldRange.start.column);
+                        pendingDiff.oldRange.end.row = max(pendingDiff.oldRange.end.row, diff.oldRange.end.row);
+                        pendingDiff.oldRange.end.column = max(pendingDiff.oldRange.end.column, diff.oldRange.end.column);
+                        clearTimeout(pendingDiffHandle);
+                    }
+                    else {
+                        pendingDiff = {
+                            oldRange: diff.oldRange,
+                            oldText: diff.oldText,
+                            newText: diff.newText
+                        };
+                    }
+
+                    pendingDiffHandle = setTimeout(function() {
+                        var newText = pendingDiff.newText;
+                        var oldText = pendingDiff.oldText;
+                        var start = { line: pendingDiff.oldRange.start.row, col: pendingDiff.oldRange.start.column };
+                        var end = { line: pendingDiff.oldRange.end.row, col: pendingDiff.oldRange.end.column };
+                        parent.editText({ filePath: filePath, start: start, end: end, newText: newText });
+                        pendingDiff = undefined;
+                        pendingDiffHandle = undefined;
+                    }, 500);
                 });
                 var saveObserver = editor.onDidSave(function (event) {
                     onDisk = true;
